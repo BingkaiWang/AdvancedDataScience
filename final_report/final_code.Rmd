@@ -1,10 +1,8 @@
 ---
 title: "Final Project Code"
 author: "Bingkai Wang"
-date: "September 20, 2017"
 output: 
-  html_document:
-    css: style.css
+  html_document
 ---
 
 ```{r setup, include=FALSE}
@@ -17,6 +15,13 @@ Perform an analysis of "data scientist" jobs listed on job boards and on the emp
 ```{r library, message= FALSE, warning= FALSE}
 packages <- c("rvest", "dplyr", "stringr", "tidytext", "ggplot2", "ggmap", "wordcloud", 
               "cowplot", "huxtable")
+for (i in packages){
+  if(!require(i,character.only = T,quietly=T,warn.conflicts = F)){
+    install.packages(i, repos = "http://cran.us.r-project.org")
+  }
+  require(i,character.only = T,quietly=T,warn.conflicts = F)
+}
+
 library(rvest) # web scraping
 library(dplyr) # data cleaning
 library(stringr); library(tidytext) # text processing
@@ -28,9 +33,17 @@ library(huxtable) # making tables in rmarkdown
 
 In this step, we use package **rvest** to scrape and collect raw data for company name, location (city, state), job description, company size, salary, rating and industry. We then output a csv file containing these information.
 
+**Since collecting data takes long time, the following code chunk is not evaluated in this file. Instead, we load the raw data from 'raw_data.csv'.**
+
 ```{r web scraping, eval = FALSE}
+# Web scraping data from glassdoor.com with job title 'data scientist'
+# Using package 'rvest' for scparing and collecting raw data for
+# company name, location (city, state) and job description
+# Output a csv file containing above information.
+# The following code can be easily generalized into thousands of jobs.
+
 #Initializing
-webpages <- 33 # 30 jobs per page
+webpages <- 5 # 30 jobs per page
 company <- rep(NA, webpages * 30)
 location <- rep(NA, webpages * 30)
 description <- rep(NA, webpages * 30)
@@ -70,9 +83,13 @@ for(i in 1:webpages){
     }
     Sys.sleep(1)
   }
+  # navigate to next page
   nextpage <- paste0('www.glassdoor.com/Job/data-scientist-jobs-SRCH_KO0,14_IP', 
                      as.character(i+1), '.htm')
+  # nextpage <- currentpage %>% html_nodes("#FooterPageNav a") %>% html_attr("href")
+  # nextpage <- paste('www.glassdoor.com', nextpage, sep = '')
   currentpage <- html_session(nextpage)
+  
   Sys.sleep(5)
 }
 proc.time() - ptm
@@ -94,7 +111,7 @@ for(i in 1: (webpages*30)){
 location <- t(as.data.frame(location))
 
 #output data frame
-raw_data <- data.frame(company = trimws(company), 
+demo_raw_data <- data.frame(company = trimws(company), 
                             rating = as.numeric(rating),
                             salary = salary,
                             city = location[,1], 
@@ -102,7 +119,8 @@ raw_data <- data.frame(company = trimws(company),
                             description = description,
                             companysize = companysize,
                             industy = str_replace_all(industry, "&amp;", "&"))
-rownames(raw_data) <- NULL
+rownames(demo_raw_data) <- NULL
+
 write.csv(demo_raw_data, "raw_data.csv")
 ```
 
@@ -121,8 +139,8 @@ print(data_for_display)
 
 ### Step 2 Identifying skills from job description and data cleaning
 
-```{r cleaning, eval=FALSE}
-raw_data <- read.csv("raw_data.csv", stringsAsFactors = F)
+```{r cleaning}
+raw_data <- read.csv(file.path("raw_data.csv"), stringsAsFactors = F)
 
 raw_data$description <- tolower(raw_data$description) #description to lower case
 raw_data$companysize <- str_replace_all(raw_data$companysize, "10000--1", "10000+")
@@ -138,7 +156,6 @@ dictionary <- data.frame(skill = seg, stringsAsFactors = F) %>%
   tally() %>%
   filter(n > 50) %>%
   arrange(desc(n))
-print(dictionary)
 stop_words <- c("color", "religion", "national origin", "sexual orientation", "etc.",
                 "age", "sex", "disability", "gender identity", "responsibilities",
                 "design", "analytics", "marital status", "analysis", "gender",
@@ -148,8 +165,6 @@ stop_words <- c("color", "religion", "national origin", "sexual orientation", "e
                 "experience", "analyze", "genetic information", "services", "state",
                 "development", "mathematics")
 dictionary <- dictionary[!(dictionary$skill %in% stop_words), ]
-print(dictionary, n = 50)
-write.csv(dictionary, "skill_tag.csv")
 
 # build skill_company matrix
 skill_company_mat <- matrix(NA, nrow = nrow(raw_data), ncol = nrow(dictionary))
@@ -166,13 +181,14 @@ saveRDS(clean_data, file = "cleandata.rds")
 Clean data looks like this:
 
 ```{r show_clean_data, echo= FALSE}
-clean_data <- readRDS("cleandata.rds")
 head(clean_data)
 ```
 
 ***
 
 ### Step 4 Exploratory analysis and Visualization
+
+** The following code chunk is only presented but not evaluated since it takes a long time to generate the map plot. **
 
 ```{r visualizaion, eval=FALSE}
 # barplot for skills
@@ -273,32 +289,35 @@ plot_grid(plot_skill_distr, plot_unique_distr,plot_industry_distr, plot_job_geod
           labels = c("A", "B", "C", "D"), ncol = 2)
 ```
 
-![Visualization of explortory analysis for Data Scientist (DS) jobs](explortory_plot.png)
+![Visualization of explortory analysis for Data Scientist (DS) jobs](exploratory_plot.png)
 
 ***
 
-### Step 5 Statistical analysis and Visualization
+### Step 5 Statistical analysis
 ```{r statistical analysis, message= FALSE, warning=FALSE}
-# salary analysis
 clean_data <- readRDS("cleandata.rds")
 complete_data <- clean_data[complete.cases(clean_data), ]
+
+# salary analysis
 salary_analysis <- complete_data[,c(3, 8:37)]
 lp <- lm(salary~., data = salary_analysis) %>% summary
 lp <- lp$coefficients
-factors <- lp[lp[,4] < 0.1, ]
+factors <- lp[lp[,4] < 0.01, ]
 factors <- factors[-1,] %>% as.data.frame()
-factors <- mutate(factors, skill = row.names(factors))
-plot_salary <- ggplot(factors) +
-  geom_col(aes(x = skill, y = Estimate, 
-               fill = as.factor(sign(Estimate)))) +
-  theme(
-    axis.ticks = element_blank(),
-    axis.line.y = element_blank(),
-    axis.text.y = element_text(size = 16),
-    legend.position = "none"
-    ) +
-  coord_flip() +
-  labs(x = NULL, y = "Salary incluence (k)")
+factors <- cbind(skill = row.names(factors), factors)
+factors[,4] <- sapply(1:3, function(i) {paste0("(", round(qnorm(0.005,factors[i,2],factors[i,3]),2),            ", ", round(qnorm(0.995, factors[i,2],factors[i,3]),2), ")")})
+names(factors) <- c("Skill", "Coefficient", "S.E.", "99% C.I.", "P-value")
+factors$Skill <- c("Python", "SAS", "Applied Mathematics")
+row.names(factors) <- NULL
+ht <- as_hux(factors, add_colnames = T)  %>%
+      set_bold(1, everywhere, TRUE)       %>%
+      set_bottom_border(c(1,4), everywhere, 0.8) %>%
+      set_top_border(1, everywhere, 0.8)
+position(ht) <- 'center'
+align(ht) <- 'center'
+caption(ht) <- 'Skills with significant (p < 0.01) influence on salary'
+width(ht) <- 0.9
+ht
 
 # salary analysis
 top_industry <- complete_data$industy %>% table %>% sort(decreasing = T)
@@ -308,16 +327,19 @@ top_state <- names(top_state[1:9])
 rating_data <- complete_data[(complete_data$industy %in% top_industry) & 
                                (complete_data$state %in% top_state), ]
 rating_analysis <- rating_data[,c(2, 3, 6, 5, 7)]
-aov(rating~salary + state+industy+companysize, data = rating_analysis) %>% summary
-ordering <- data.frame(companysize = c("1-50", "51-200", "201-500", "501-1000",
-                                       "1001-5000", "5001-10000", "10000+"),
-                       order = 1:7)
-rating_analysis <- left_join(rating_analysis, ordering)
-plot_rating <- ggplot(rating_analysis) + 
-  geom_boxplot(aes(x = reorder(companysize, order), y = rating)) +
-  geom_hline(yintercept = mean(rating_analysis$rating), color = 'coral') +
-  labs(x = "companysize") +
-  theme(axis.text.x = element_text(angle = 30, vjust = 0.5))
-
-plot_grid(plot_salary, plot_rating, labels = c("A", "B"), ncol =2)
+factors <- aov(rating~salary+state+industy+companysize, data=rating_analysis) %>% summary
+rating_table <- rbind(factors[[1]][["Mean Sq"]][1:4], factors[[1]][["Pr(>F)"]][1:4]) %>% round(2)
+row.names(rating_table) <- c("Mean square", "P-value")
+colnames(rating_table) <- c("Salary", "State", "Industry", "Company Size")
+rating_table <- cbind(Factor = row.names(rating_table), rating_table)
+colnames(rating_table)[1] <- " "
+hht <- as_hux(rating_table, add_colnames = T)  %>%
+      set_bold(1, everywhere, TRUE)       %>%
+      set_bottom_border(c(1,3), everywhere, 0.8) %>%
+      set_top_border(1, everywhere, 0.8)
+position(hht) <- 'center'
+align(hht) <- 'center'
+caption(hht) <- 'Factors impacting employee\'s satisfaction'
+width(hht) <- 0.8
+hht
 ```

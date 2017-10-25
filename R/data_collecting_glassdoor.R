@@ -2,8 +2,6 @@
 # Using package 'rvest' for scparing and collecting raw data for
 # company name, location (city, state) and job description
 # Output a csv file containing above information.
-
-# Currently we scape only several hundreds of jobs for testing. 
 # The following code can be easily generalized into thousands of jobs.
 
 require(rvest)
