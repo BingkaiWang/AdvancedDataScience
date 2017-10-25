@@ -186,7 +186,7 @@ head(clean_data)
 
 ***
 
-### Step 4 Exploratory analysis and Visualization
+### Step 3 Exploratory analysis and Visualization
 
 ** The following code chunk is only presented but not evaluated since it takes a long time to generate the map plot. **
 
@@ -293,7 +293,7 @@ plot_grid(plot_skill_distr, plot_unique_distr,plot_industry_distr, plot_job_geod
 
 ***
 
-### Step 5 Statistical analysis
+### Step 4 Statistical analysis
 ```{r statistical analysis, message= FALSE, warning=FALSE}
 clean_data <- readRDS("cleandata.rds")
 complete_data <- clean_data[complete.cases(clean_data), ]
